@@ -53,6 +53,15 @@ function timeKeyIT(d) {
   }).format(d);
 }
 
+function dayKeyIT(d) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(d);
+}
+
 function itDate(d, seconds = true) {
   if (!d) return "-";
   const p = new Intl.DateTimeFormat("it-IT", {
@@ -327,7 +336,8 @@ export default function LucaTradingAuto() {
     if (Number.isNaN(xp) || xp < exit.low || xp > exit.high) return alert(`Prezzo chiusura fuori dalla candela: ${price(exit.low)} - ${price(exit.high)}`);
     const ot = setSecond(entry.time, Number(entrySecond || 0));
     const ct = setSecond(exit.time, Number(exitSecond || 0));
-    if (ct <= ot) return alert("La chiusura deve essere successiva all'apertura.");
+    if (dayKeyIT(ot) !== dayKeyIT(ct)) return alert("Apertura e chiusura devono essere nello stesso giorno.");
+    if (ct <= ot) return alert("La chiusura deve essere dopo l'apertura.");
     setTrades([...trades, {
       side,
       lot: l,
@@ -405,32 +415,23 @@ export default function LucaTradingAuto() {
     const pool = filteredCandles();
     if (pool.length < 5) return alert("Servono più candele nel range selezionato.");
 
-    // IMPORTANTE: per evitare aperture il 29 e chiusure il 30,
-    // ogni screenshot automatico viene generato usando solo candele dello stesso giorno italiano.
-    const groups = {};
+    // Raggruppo per giorno italiano: ogni screenshot usa solo candele dello stesso giorno.
+    const groupsMap = new Map();
     for (const c of pool) {
-      const day = timeKeyIT(c.time).slice(0, 10);
-      if (!groups[day]) groups[day] = [];
-      groups[day].push(c);
+      const key = dayKeyIT(c.time);
+      if (!groupsMap.has(key)) groupsMap.set(key, []);
+      groupsMap.get(key).push(c);
     }
-
-    const dayPools = Object.values(groups)
-      .map(arr => arr.sort((a, b) => a.time - b.time))
-      .filter(arr => arr.length >= 5);
-
-    if (!dayPools.length) {
-      alert("Nel range orario selezionato non ci sono abbastanza candele nello stesso giorno.");
-      return;
-    }
+    const dayGroups = Array.from(groupsMap.values()).filter(g => g.length >= 5);
+    if (!dayGroups.length) return alert("Nel range selezionato non ci sono abbastanza candele nello stesso giorno.");
 
     const created = [];
 
     for (let s = 0; s < Number(screenCount); s++) {
       let best = null;
-      for (let attempt = 0; attempt < 700; attempt++) {
-        const dayPool = dayPools[randInt(0, dayPools.length - 1)];
+      for (let attempt = 0; attempt < 800; attempt++) {
+        const dayPool = dayGroups[randInt(0, dayGroups.length - 1)];
         const arr = [];
-
         for (let i = 0; i < Number(autoPositive); i++) {
           const t = makeTrade(true, dayPool);
           if (t) arr.push(t);
@@ -439,19 +440,13 @@ export default function LucaTradingAuto() {
           const t = makeTrade(false, dayPool);
           if (t) arr.push(t);
         }
-
+        if (arr.length !== Number(autoPositive) + Number(autoNegative)) continue;
         arr.sort((a,b) => a.closeTime - b.closeTime);
+        const sameDay = arr.every(t => dayKeyIT(t.openTime) === dayKeyIT(t.closeTime));
+        const validOrder = arr.every(t => t.closeTime > t.openTime);
+        if (!sameDay || !validOrder) continue;
         const total = arr.reduce((a,t)=>a+t.profit,0);
-
-        // Controllo finale: nessuna operazione può chiudere prima dell'apertura
-        // e tutte le operazioni devono restare nello stesso giorno italiano.
-        const validTimes = arr.every(t => {
-          const openDay = timeKeyIT(t.openTime).slice(0, 10);
-          const closeDay = timeKeyIT(t.closeTime).slice(0, 10);
-          return t.closeTime > t.openTime && openDay === closeDay;
-        });
-
-        if (validTimes && total >= Number(profitMin) && total <= Number(profitMax)) {
+        if (total >= Number(profitMin) && total <= Number(profitMax)) {
           best = arr;
           break;
         }
