@@ -327,6 +327,7 @@ export default function LucaTradingAuto() {
     if (Number.isNaN(xp) || xp < exit.low || xp > exit.high) return alert(`Prezzo chiusura fuori dalla candela: ${price(exit.low)} - ${price(exit.high)}`);
     const ot = setSecond(entry.time, Number(entrySecond || 0));
     const ct = setSecond(exit.time, Number(exitSecond || 0));
+    if (ct <= ot) return alert("La chiusura deve essere successiva all'apertura.");
     setTrades([...trades, {
       side,
       lot: l,
@@ -403,23 +404,54 @@ export default function LucaTradingAuto() {
   function generateAuto() {
     const pool = filteredCandles();
     if (pool.length < 5) return alert("Servono più candele nel range selezionato.");
+
+    // IMPORTANTE: per evitare aperture il 29 e chiusure il 30,
+    // ogni screenshot automatico viene generato usando solo candele dello stesso giorno italiano.
+    const groups = {};
+    for (const c of pool) {
+      const day = timeKeyIT(c.time).slice(0, 10);
+      if (!groups[day]) groups[day] = [];
+      groups[day].push(c);
+    }
+
+    const dayPools = Object.values(groups)
+      .map(arr => arr.sort((a, b) => a.time - b.time))
+      .filter(arr => arr.length >= 5);
+
+    if (!dayPools.length) {
+      alert("Nel range orario selezionato non ci sono abbastanza candele nello stesso giorno.");
+      return;
+    }
+
     const created = [];
 
     for (let s = 0; s < Number(screenCount); s++) {
       let best = null;
-      for (let attempt = 0; attempt < 500; attempt++) {
+      for (let attempt = 0; attempt < 700; attempt++) {
+        const dayPool = dayPools[randInt(0, dayPools.length - 1)];
         const arr = [];
+
         for (let i = 0; i < Number(autoPositive); i++) {
-          const t = makeTrade(true, pool);
+          const t = makeTrade(true, dayPool);
           if (t) arr.push(t);
         }
         for (let i = 0; i < Number(autoNegative); i++) {
-          const t = makeTrade(false, pool);
+          const t = makeTrade(false, dayPool);
           if (t) arr.push(t);
         }
+
         arr.sort((a,b) => a.closeTime - b.closeTime);
         const total = arr.reduce((a,t)=>a+t.profit,0);
-        if (total >= Number(profitMin) && total <= Number(profitMax)) {
+
+        // Controllo finale: nessuna operazione può chiudere prima dell'apertura
+        // e tutte le operazioni devono restare nello stesso giorno italiano.
+        const validTimes = arr.every(t => {
+          const openDay = timeKeyIT(t.openTime).slice(0, 10);
+          const closeDay = timeKeyIT(t.closeTime).slice(0, 10);
+          return t.closeTime > t.openTime && openDay === closeDay;
+        });
+
+        if (validTimes && total >= Number(profitMin) && total <= Number(profitMax)) {
           best = arr;
           break;
         }
