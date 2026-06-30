@@ -53,15 +53,6 @@ function timeKeyIT(d) {
   }).format(d);
 }
 
-function dayKeyIT(d) {
-  return new Intl.DateTimeFormat("sv-SE", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(d);
-}
-
 function itDate(d, seconds = true) {
   if (!d) return "-";
   const p = new Intl.DateTimeFormat("it-IT", {
@@ -233,6 +224,7 @@ function renderReportBlob(trades, layout, tab, deposit, credit, withdrawal) {
 
 export default function LucaTradingAuto() {
   const [candles, setCandles] = useState([]);
+  const [selectedDay, setSelectedDay] = useState("");
   const [selected, setSelected] = useState(null);
   const [preview, setPreview] = useState(null);
   const [trades, setTrades] = useState([]);
@@ -265,9 +257,27 @@ export default function LucaTradingAuto() {
   const [endHour, setEndHour] = useState("22:00");
 
   const totalProfit = useMemo(() => trades.reduce((a, t) => a + t.profit, 0), [trades]);
+  const dayOptions = useMemo(() => {
+    const days = [];
+    const seen = new Set();
+    candles.forEach(c => {
+      const day = itDate(c.time, false).slice(0, 10);
+      if (!seen.has(day)) {
+        seen.add(day);
+        days.push(day);
+      }
+    });
+    return days;
+  }, [candles]);
+
+  const candlesForDay = useMemo(() => {
+    if (!selectedDay) return candles;
+    return candles.filter(c => itDate(c.time, false).slice(0, 10) === selectedDay);
+  }, [candles, selectedDay]);
+
   const activeCandle = preview || selected;
-  const entry = candles[entryIndex];
-  const exit = candles[exitIndex];
+  const entry = candlesForDay[entryIndex];
+  const exit = candlesForDay[exitIndex];
 
   function loadCSV(file) {
     Papa.parse(file, {
@@ -304,29 +314,32 @@ export default function LucaTradingAuto() {
         .filter(c => c.time && ![c.open,c.high,c.low,c.close].some(Number.isNaN))
         .sort((a,b) => a.time - b.time);
 
+        const lastDay = parsed.length ? itDate(parsed[parsed.length - 1].time, false).slice(0, 10) : "";
+        const dayCandles = lastDay ? parsed.filter(c => itDate(c.time, false).slice(0, 10) === lastDay) : parsed;
         setCandles(parsed);
+        setSelectedDay(lastDay);
         setTrades([]);
         setSelected(null);
         setPreview(null);
         setAutoSets([]);
         setEntryIndex(0);
-        setExitIndex(Math.min(1, parsed.length - 1));
-        setEntryPrice(parsed[0]?.open.toFixed(3) || "");
-        setExitPrice(parsed[1]?.close.toFixed(3) || parsed[0]?.close.toFixed(3) || "");
+        setExitIndex(Math.min(1, dayCandles.length - 1));
+        setEntryPrice(dayCandles[0]?.open.toFixed(3) || "");
+        setExitPrice(dayCandles[1]?.close.toFixed(3) || dayCandles[0]?.close.toFixed(3) || "");
       }
     });
   }
 
   function setCandleAsEntry(c) {
     if (!c) return;
-    const idx = candles.findIndex(x => x.id === c.id);
-    if (idx >= 0) { setEntryIndex(idx); setEntryPrice(candles[idx].open.toFixed(3)); }
+    const idx = candlesForDay.findIndex(x => x.id === c.id);
+    if (idx >= 0) { setEntryIndex(idx); setEntryPrice(candlesForDay[idx].open.toFixed(3)); }
   }
 
   function setCandleAsExit(c) {
     if (!c) return;
-    const idx = candles.findIndex(x => x.id === c.id);
-    if (idx >= 0) { setExitIndex(idx); setExitPrice(candles[idx].close.toFixed(3)); }
+    const idx = candlesForDay.findIndex(x => x.id === c.id);
+    if (idx >= 0) { setExitIndex(idx); setExitPrice(candlesForDay[idx].close.toFixed(3)); }
   }
 
   function addTrade() {
@@ -336,8 +349,6 @@ export default function LucaTradingAuto() {
     if (Number.isNaN(xp) || xp < exit.low || xp > exit.high) return alert(`Prezzo chiusura fuori dalla candela: ${price(exit.low)} - ${price(exit.high)}`);
     const ot = setSecond(entry.time, Number(entrySecond || 0));
     const ct = setSecond(exit.time, Number(exitSecond || 0));
-    if (dayKeyIT(ot) !== dayKeyIT(ct)) return alert("Apertura e chiusura devono essere nello stesso giorno.");
-    if (ct <= ot) return alert("La chiusura deve essere dopo l'apertura.");
     setTrades([...trades, {
       side,
       lot: l,
@@ -354,24 +365,15 @@ export default function LucaTradingAuto() {
   function filteredCandles() {
     const [sh, sm] = startHour.split(":").map(Number);
     const [eh, em] = endHour.split(":").map(Number);
-    return candles.filter(c => {
+    return candlesForDay.filter(c => {
       const p = new Intl.DateTimeFormat("it-IT", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(c.time).reduce((a,x)=>{a[x.type]=x.value;return a;},{});
       const m = Number(p.hour) * 60 + Number(p.minute);
       return m >= sh * 60 + sm && m <= eh * 60 + em;
     });
   }
 
-  function exactPrices(c) {
-    // Prezzi realmente presenti nella candela TradingView/CSV.
-    // Uso solo OHLC, così il valore dello screen coincide al millesimo con il CSV.
-    return [c.open, c.high, c.low, c.close]
-      .map(x => Number(Number(x).toFixed(3)))
-      .filter((x, i, arr) => arr.indexOf(x) === i)
-      .sort((a, b) => a - b);
-  }
-
   function makeTrade(wantPositive, pool) {
-    for (let tries = 0; tries < 1200; tries++) {
+    for (let tries = 0; tries < 800; tries++) {
       const a = randInt(0, pool.length - 2);
       const b = randInt(a + 1, pool.length - 1);
       const c1 = pool[a];
@@ -379,26 +381,31 @@ export default function LucaTradingAuto() {
       const l = Number(rand(Number(lotMin), Number(lotMax)).toFixed(2));
       const direction = Math.random() > 0.5 ? "buy" : "sell";
 
-      const entries = exactPrices(c1);
-      const exits = exactPrices(c2);
-
-      const validPairs = [];
-
-      for (const entryP of entries) {
-        for (const exitP of exits) {
-          const p = pnl(direction, entryP, exitP, l, Number(pointValue));
-          if (wantPositive && p > 0) {
-            validPairs.push({ entryP, exitP, p });
-          }
-          if (!wantPositive && p < 0) {
-            validPairs.push({ entryP, exitP, p });
-          }
+      let entryP, exitP;
+      if (wantPositive) {
+        if (direction === "buy") {
+          entryP = rand(c1.low, c1.high);
+          exitP = rand(Math.max(c2.low, entryP + 0.001), c2.high);
+        } else {
+          entryP = rand(c1.low, c1.high);
+          exitP = rand(c2.low, Math.min(c2.high, entryP - 0.001));
+        }
+      } else {
+        if (direction === "buy") {
+          entryP = rand(c1.low, c1.high);
+          exitP = rand(c2.low, Math.min(c2.high, entryP - 0.001));
+        } else {
+          entryP = rand(c1.low, c1.high);
+          exitP = rand(Math.max(c2.low, entryP + 0.001), c2.high);
         }
       }
 
-      if (!validPairs.length) continue;
-
-      const selectedPair = validPairs[randInt(0, validPairs.length - 1)];
+      if (Number.isNaN(entryP) || Number.isNaN(exitP)) continue;
+      entryP = clamp(entryP, c1.low, c1.high);
+      exitP = clamp(exitP, c2.low, c2.high);
+      const p = pnl(direction, entryP, exitP, l, Number(pointValue));
+      if (wantPositive && p <= 0) continue;
+      if (!wantPositive && p >= 0) continue;
 
       return {
         side: direction,
@@ -407,9 +414,9 @@ export default function LucaTradingAuto() {
         closeCandleId: c2.id,
         openTime: setSecond(c1.time, randInt(0, 59)),
         closeTime: setSecond(c2.time, randInt(0, 59)),
-        entry: Number(selectedPair.entryP.toFixed(3)),
-        exit: Number(selectedPair.exitP.toFixed(3)),
-        profit: Number(selectedPair.p.toFixed(2))
+        entry: Number(entryP.toFixed(3)),
+        exit: Number(exitP.toFixed(3)),
+        profit: Number(p.toFixed(2))
       };
     }
     return null;
@@ -418,37 +425,21 @@ export default function LucaTradingAuto() {
   function generateAuto() {
     const pool = filteredCandles();
     if (pool.length < 5) return alert("Servono più candele nel range selezionato.");
-
-    // Raggruppo per giorno italiano: ogni screenshot usa solo candele dello stesso giorno.
-    const groupsMap = new Map();
-    for (const c of pool) {
-      const key = dayKeyIT(c.time);
-      if (!groupsMap.has(key)) groupsMap.set(key, []);
-      groupsMap.get(key).push(c);
-    }
-    const dayGroups = Array.from(groupsMap.values()).filter(g => g.length >= 5);
-    if (!dayGroups.length) return alert("Nel range selezionato non ci sono abbastanza candele nello stesso giorno.");
-
     const created = [];
 
     for (let s = 0; s < Number(screenCount); s++) {
       let best = null;
-      for (let attempt = 0; attempt < 800; attempt++) {
-        const dayPool = dayGroups[randInt(0, dayGroups.length - 1)];
+      for (let attempt = 0; attempt < 500; attempt++) {
         const arr = [];
         for (let i = 0; i < Number(autoPositive); i++) {
-          const t = makeTrade(true, dayPool);
+          const t = makeTrade(true, pool);
           if (t) arr.push(t);
         }
         for (let i = 0; i < Number(autoNegative); i++) {
-          const t = makeTrade(false, dayPool);
+          const t = makeTrade(false, pool);
           if (t) arr.push(t);
         }
-        if (arr.length !== Number(autoPositive) + Number(autoNegative)) continue;
         arr.sort((a,b) => a.closeTime - b.closeTime);
-        const sameDay = arr.every(t => dayKeyIT(t.openTime) === dayKeyIT(t.closeTime));
-        const validOrder = arr.every(t => t.closeTime > t.openTime);
-        if (!sameDay || !validOrder) continue;
         const total = arr.reduce((a,t)=>a+t.profit,0);
         if (total >= Number(profitMin) && total <= Number(profitMax)) {
           best = arr;
@@ -498,6 +489,22 @@ export default function LucaTradingAuto() {
           <h2>1. Carica CSV</h2>
           <input type="file" accept=".csv" onChange={e => e.target.files?.[0] && loadCSV(e.target.files[0])}/>
           <p className="hint">TradingView: OANDA:XAUUSD, timeframe 1m, formato ora Timestamp UNIX.</p>
+          <label>Giorno da usare</label>
+          <select value={selectedDay} onChange={e=>{
+            const day = e.target.value;
+            setSelectedDay(day);
+            const dayCandles = candles.filter(c => itDate(c.time, false).slice(0, 10) === day);
+            setTrades([]);
+            setSelected(null);
+            setPreview(null);
+            setAutoSets([]);
+            setEntryIndex(0);
+            setExitIndex(Math.min(1, dayCandles.length - 1));
+            setEntryPrice(dayCandles[0]?.open.toFixed(3) || "");
+            setExitPrice(dayCandles[1]?.close.toFixed(3) || dayCandles[0]?.close.toFixed(3) || "");
+          }}>
+            {dayOptions.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
           <h2>Layout report</h2>
           <select value={layout} onChange={e=>setLayout(e.target.value)}><option value="white">Mobile bianco classico</option><option value="compact">Mobile bianco compatto</option><option value="dark">Mobile nero</option></select>
           <select value={tab} onChange={e=>setTab(e.target.value)}><option>Day</option><option>Week</option><option>Month</option><option>Custom</option></select>
@@ -520,11 +527,11 @@ export default function LucaTradingAuto() {
           <button className="full" onClick={downloadAutoZip}>Scarica ZIP screen</button>
         </aside>
         <section className="content">
-          <div className="cards"><div><span>Candele</span><b>{candles.length}</b></div><div><span>Prima</span><b>{candles[0]?itDate(candles[0].time):"-"}</b></div><div><span>Ultima</span><b>{candles.at(-1)?itDate(candles.at(-1).time):"-"}</b></div><div><span>Profitto attuale</span><b className={totalProfit>=0?"pos":"neg"}>{money(totalProfit)}</b></div></div>
-          <Chart candles={candles} trades={trades} selected={selected} preview={preview} onPick={setSelected} onPreview={setPreview}/>
+          <div className="cards"><div><span>Candele giorno</span><b>{candlesForDay.length}</b></div><div><span>Prima</span><b>{candlesForDay[0]?itDate(candlesForDay[0].time):"-"}</b></div><div><span>Ultima</span><b>{candlesForDay.at(-1)?itDate(candlesForDay.at(-1).time):"-"}</b></div><div><span>Profitto attuale</span><b className={totalProfit>=0?"pos":"neg"}>{money(totalProfit)}</b></div></div>
+          <Chart candles={candlesForDay} trades={trades} selected={selected} preview={preview} onPick={setSelected} onPreview={setPreview}/>
           <div className="preview-panel"><div><h3>Anteprima candela</h3>{activeCandle ? <p><b>{itDate(activeCandle.time)}</b> — O {price(activeCandle.open)} · H {price(activeCandle.high)} · L {price(activeCandle.low)} · C {price(activeCandle.close)} · Riga CSV {activeCandle.rowIndex + 1}</p> : <p>Passa sopra una candela nel grafico.</p>}</div><div className="mini-actions"><button onClick={()=>setCandleAsEntry(activeCandle)}>Usa come apertura</button><button onClick={()=>setCandleAsExit(activeCandle)}>Usa come chiusura</button></div></div>
           {autoSets.length > 0 && <div className="auto-list"><h3>Screen automatici generati</h3>{autoSets.map((s,i)=><button key={i} onClick={()=>setTrades(s.trades)}>{s.name} · profit {money(s.trades.reduce((a,t)=>a+t.profit,0))}</button>)}</div>}
-          <div className="tradegrid"><div className="box"><h2>Apertura</h2><select value={entryIndex} onChange={e=>{const idx=Number(e.target.value);setEntryIndex(idx);setEntryPrice(candles[idx]?.open.toFixed(3)||"")}}>{candles.map((c,i)=><option key={c.id} value={i}>{candleMenu(c)}</option>)}</select>{entry&&<p className="hint">Range reale: {price(entry.low)} - {price(entry.high)}</p>}<label>Prezzo apertura</label><input type="number" step="0.001" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)}/><label>Secondo apertura</label><input type="number" min="0" max="59" value={entrySecond} onChange={e=>setEntrySecond(e.target.value)}/></div><div className="box"><h2>Chiusura</h2><select value={exitIndex} onChange={e=>{const idx=Number(e.target.value);setExitIndex(idx);setExitPrice(candles[idx]?.close.toFixed(3)||"")}}>{candles.map((c,i)=><option key={c.id} value={i}>{candleMenu(c)}</option>)}</select>{exit&&<p className="hint">Range reale: {price(exit.low)} - {price(exit.high)}</p>}<label>Prezzo chiusura</label><input type="number" step="0.001" value={exitPrice} onChange={e=>setExitPrice(e.target.value)}/><label>Secondo chiusura</label><input type="number" min="0" max="59" value={exitSecond} onChange={e=>setExitSecond(e.target.value)}/></div></div>
+          <div className="tradegrid"><div className="box"><h2>Apertura</h2><select value={entryIndex} onChange={e=>{const idx=Number(e.target.value);setEntryIndex(idx);setEntryPrice(candlesForDay[idx]?.open.toFixed(3)||"")}}>{candlesForDay.map((c,i)=><option key={c.id} value={i}>{candleMenu(c)}</option>)}</select>{entry&&<p className="hint">Range reale: {price(entry.low)} - {price(entry.high)}</p>}<label>Prezzo apertura</label><input type="number" step="0.001" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)}/><label>Secondo apertura</label><input type="number" min="0" max="59" value={entrySecond} onChange={e=>setEntrySecond(e.target.value)}/></div><div className="box"><h2>Chiusura</h2><select value={exitIndex} onChange={e=>{const idx=Number(e.target.value);setExitIndex(idx);setExitPrice(candlesForDay[idx]?.close.toFixed(3)||"")}}>{candlesForDay.map((c,i)=><option key={c.id} value={i}>{candleMenu(c)}</option>)}</select>{exit&&<p className="hint">Range reale: {price(exit.low)} - {price(exit.high)}</p>}<label>Prezzo chiusura</label><input type="number" step="0.001" value={exitPrice} onChange={e=>setExitPrice(e.target.value)}/><label>Secondo chiusura</label><input type="number" min="0" max="59" value={exitSecond} onChange={e=>setExitSecond(e.target.value)}/></div></div>
           <div className="bar"><select value={side} onChange={e=>setSide(e.target.value)}><option value="buy">BUY</option><option value="sell">SELL</option></select><input type="number" step="0.01" value={lot} onChange={e=>setLot(e.target.value)}/><button className="primary" onClick={addTrade}>Aggiungi operazione</button></div>
           <table><thead><tr><th>#</th><th>Dir</th><th>Lotto</th><th>Apertura</th><th>Prezzo</th><th>Chiusura</th><th>Prezzo</th><th>P/L</th><th></th></tr></thead><tbody>{trades.map((t,i)=><tr key={i}><td>{i+1}</td><td className={t.side==="buy"?"buy":"sell"}>{t.side.toUpperCase()}</td><td>{t.lot.toFixed(2)}</td><td>{itDate(t.openTime)}</td><td>{price(t.entry)}</td><td>{itDate(t.closeTime)}</td><td>{price(t.exit)}</td><td className={t.profit>=0?"pos":"neg"}>{money(t.profit)}</td><td><button onClick={()=>setTrades(trades.filter((_,x)=>x!==i))}>×</button></td></tr>)}</tbody></table>
         </section>
