@@ -361,8 +361,17 @@ export default function LucaTradingAuto() {
     });
   }
 
+  function exactPrices(c) {
+    // Prezzi realmente presenti nella candela TradingView/CSV.
+    // Uso solo OHLC, così il valore dello screen coincide al millesimo con il CSV.
+    return [c.open, c.high, c.low, c.close]
+      .map(x => Number(Number(x).toFixed(3)))
+      .filter((x, i, arr) => arr.indexOf(x) === i)
+      .sort((a, b) => a - b);
+  }
+
   function makeTrade(wantPositive, pool) {
-    for (let tries = 0; tries < 800; tries++) {
+    for (let tries = 0; tries < 1200; tries++) {
       const a = randInt(0, pool.length - 2);
       const b = randInt(a + 1, pool.length - 1);
       const c1 = pool[a];
@@ -370,31 +379,26 @@ export default function LucaTradingAuto() {
       const l = Number(rand(Number(lotMin), Number(lotMax)).toFixed(2));
       const direction = Math.random() > 0.5 ? "buy" : "sell";
 
-      let entryP, exitP;
-      if (wantPositive) {
-        if (direction === "buy") {
-          entryP = rand(c1.low, c1.high);
-          exitP = rand(Math.max(c2.low, entryP + 0.001), c2.high);
-        } else {
-          entryP = rand(c1.low, c1.high);
-          exitP = rand(c2.low, Math.min(c2.high, entryP - 0.001));
-        }
-      } else {
-        if (direction === "buy") {
-          entryP = rand(c1.low, c1.high);
-          exitP = rand(c2.low, Math.min(c2.high, entryP - 0.001));
-        } else {
-          entryP = rand(c1.low, c1.high);
-          exitP = rand(Math.max(c2.low, entryP + 0.001), c2.high);
+      const entries = exactPrices(c1);
+      const exits = exactPrices(c2);
+
+      const validPairs = [];
+
+      for (const entryP of entries) {
+        for (const exitP of exits) {
+          const p = pnl(direction, entryP, exitP, l, Number(pointValue));
+          if (wantPositive && p > 0) {
+            validPairs.push({ entryP, exitP, p });
+          }
+          if (!wantPositive && p < 0) {
+            validPairs.push({ entryP, exitP, p });
+          }
         }
       }
 
-      if (Number.isNaN(entryP) || Number.isNaN(exitP)) continue;
-      entryP = clamp(entryP, c1.low, c1.high);
-      exitP = clamp(exitP, c2.low, c2.high);
-      const p = pnl(direction, entryP, exitP, l, Number(pointValue));
-      if (wantPositive && p <= 0) continue;
-      if (!wantPositive && p >= 0) continue;
+      if (!validPairs.length) continue;
+
+      const selectedPair = validPairs[randInt(0, validPairs.length - 1)];
 
       return {
         side: direction,
@@ -403,9 +407,9 @@ export default function LucaTradingAuto() {
         closeCandleId: c2.id,
         openTime: setSecond(c1.time, randInt(0, 59)),
         closeTime: setSecond(c2.time, randInt(0, 59)),
-        entry: Number(entryP.toFixed(3)),
-        exit: Number(exitP.toFixed(3)),
-        profit: Number(p.toFixed(2))
+        entry: Number(selectedPair.entryP.toFixed(3)),
+        exit: Number(selectedPair.exitP.toFixed(3)),
+        profit: Number(selectedPair.p.toFixed(2))
       };
     }
     return null;
