@@ -478,6 +478,23 @@ export default function LucaTradingAuto() {
     downloadBlob(blob, "luca_trading_xauusd_report.png");
   }
 
+  function updateTrade(index, patch) {
+    setTrades(current => current.map((trade, i) => {
+      if (i !== index) return trade;
+      const updated = { ...trade, ...patch };
+      const sideValue = updated.side === "sell" ? "sell" : "buy";
+      const lotValue = Number(updated.lot);
+      const entryValue = Number(updated.entry);
+      const exitValue = Number(updated.exit);
+      updated.side = sideValue;
+      updated.lot = Number.isFinite(lotValue) ? lotValue : trade.lot;
+      updated.entry = Number.isFinite(entryValue) ? entryValue : trade.entry;
+      updated.exit = Number.isFinite(exitValue) ? exitValue : trade.exit;
+      updated.profit = Number(pnl(updated.side, updated.entry, updated.exit, updated.lot, Number(pointValue)).toFixed(2));
+      return updated;
+    }));
+  }
+
   return (
     <main className="page">
       <header className="top">
@@ -533,7 +550,8 @@ export default function LucaTradingAuto() {
           {autoSets.length > 0 && <div className="auto-list"><h3>Screen automatici generati</h3>{autoSets.map((s,i)=><button key={i} onClick={()=>setTrades(s.trades)}>{s.name} · profit {money(s.trades.reduce((a,t)=>a+t.profit,0))}</button>)}</div>}
           <div className="tradegrid"><div className="box"><h2>Apertura</h2><select value={entryIndex} onChange={e=>{const idx=Number(e.target.value);setEntryIndex(idx);setEntryPrice(candlesForDay[idx]?.open.toFixed(3)||"")}}>{candlesForDay.map((c,i)=><option key={c.id} value={i}>{candleMenu(c)}</option>)}</select>{entry&&<p className="hint">Range reale: {price(entry.low)} - {price(entry.high)}</p>}<label>Prezzo apertura</label><input type="number" step="0.001" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)}/><label>Secondo apertura</label><input type="number" min="0" max="59" value={entrySecond} onChange={e=>setEntrySecond(e.target.value)}/></div><div className="box"><h2>Chiusura</h2><select value={exitIndex} onChange={e=>{const idx=Number(e.target.value);setExitIndex(idx);setExitPrice(candlesForDay[idx]?.close.toFixed(3)||"")}}>{candlesForDay.map((c,i)=><option key={c.id} value={i}>{candleMenu(c)}</option>)}</select>{exit&&<p className="hint">Range reale: {price(exit.low)} - {price(exit.high)}</p>}<label>Prezzo chiusura</label><input type="number" step="0.001" value={exitPrice} onChange={e=>setExitPrice(e.target.value)}/><label>Secondo chiusura</label><input type="number" min="0" max="59" value={exitSecond} onChange={e=>setExitSecond(e.target.value)}/></div></div>
           <div className="bar"><select value={side} onChange={e=>setSide(e.target.value)}><option value="buy">BUY</option><option value="sell">SELL</option></select><input type="number" step="0.01" value={lot} onChange={e=>setLot(e.target.value)}/><button className="primary" onClick={addTrade}>Aggiungi operazione</button></div>
-          <table><thead><tr><th>#</th><th>Dir</th><th>Lotto</th><th>Apertura</th><th>Prezzo</th><th>Chiusura</th><th>Prezzo</th><th>P/L</th><th></th></tr></thead><tbody>{trades.map((t,i)=><tr key={i}><td>{i+1}</td><td className={t.side==="buy"?"buy":"sell"}>{t.side.toUpperCase()}</td><td>{t.lot.toFixed(2)}</td><td>{itDate(t.openTime)}</td><td>{price(t.entry)}</td><td>{itDate(t.closeTime)}</td><td>{price(t.exit)}</td><td className={t.profit>=0?"pos":"neg"}>{money(t.profit)}</td><td><button onClick={()=>setTrades(trades.filter((_,x)=>x!==i))}>×</button></td></tr>)}</tbody></table>
+          <div className="edit-note">Puoi correggere manualmente lotto, direzione e prezzi anche fuori dal range letto. Lo screenshot viene rigenerato usando questi valori.</div>
+          <table><thead><tr><th>#</th><th>Dir</th><th>Lotto</th><th>Apertura</th><th>Prezzo</th><th>Chiusura</th><th>Prezzo</th><th>P/L</th><th></th></tr></thead><tbody>{trades.map((t,i)=><tr key={i}><td>{i+1}</td><td><select className="table-input dir-select" value={t.side} onChange={e=>updateTrade(i,{side:e.target.value})}><option value="buy">BUY</option><option value="sell">SELL</option></select></td><td><input className="table-input small" type="number" step="0.01" value={t.lot} onChange={e=>updateTrade(i,{lot:e.target.value})}/></td><td>{itDate(t.openTime)}</td><td><input className="table-input price-input" type="number" step="0.001" value={t.entry} onChange={e=>updateTrade(i,{entry:e.target.value})}/></td><td>{itDate(t.closeTime)}</td><td><input className="table-input price-input" type="number" step="0.001" value={t.exit} onChange={e=>updateTrade(i,{exit:e.target.value})}/></td><td className={t.profit>=0?"pos":"neg"}>{money(t.profit)}</td><td><button onClick={()=>setTrades(trades.filter((_,x)=>x!==i))}>×</button></td></tr>)}</tbody></table>
         </section>
       </div>
     </main>
