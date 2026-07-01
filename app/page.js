@@ -418,7 +418,10 @@ export default function LucaTradingAuto() {
       { open: scenario2Open, close: scenario2Close },
       { open: scenario3Open, close: scenario3Close }
     ]
-    .map(s => ({ open: Number(String(s.open).replace(",", ".")), close: Number(String(s.close).replace(",", ".")) }))
+    .map(s => ({
+      open: String(s.open).trim() === "" ? NaN : Number(String(s.open).replace(",", ".")),
+      close: String(s.close).trim() === "" ? NaN : Number(String(s.close).replace(",", "."))
+    }))
     .filter(s => !Number.isNaN(s.open) && !Number.isNaN(s.close));
   }
 
