@@ -1,1 +1,58 @@
-*{box-sizing:border-box}body{margin:0;background:#06101c;color:#edf5ff;font-family:Arial,sans-serif}.page{padding:18px}.top{display:flex;justify-content:space-between;align-items:center;background:#0b1524;border:1px solid #20364f;border-radius:16px;padding:18px;margin-bottom:18px}h1{margin:0;font-size:32px}p{color:#9db1c8}.layout{display:grid;grid-template-columns:360px 1fr;gap:18px}.side,.content{background:#0b1524;border:1px solid #20364f;border-radius:16px;padding:16px}.side h2{font-size:16px;margin-top:22px}input,select{width:100%;background:#101d2e;border:1px solid #2a4665;color:white;padding:10px;border-radius:9px;margin:6px 0 12px}button{background:#13263d;border:1px solid #2b4968;color:white;border-radius:9px;padding:10px 14px;cursor:pointer}button.primary{background:#155bd7;border-color:#3182ff;font-weight:700}.full{width:100%;margin:6px 0}.hint{font-size:13px;color:#8ba2bb}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.cards div{background:#101d2e;border:1px solid #20364f;border-radius:12px;padding:12px}.cards span{color:#8ba2bb;font-size:12px;display:block}.cards b{margin-top:6px;display:block}.chart{width:100%;height:430px;border:1px solid #20364f;border-radius:16px;margin-bottom:14px}.empty-chart{height:430px;display:flex;align-items:center;justify-content:center;border:1px dashed #2b4968;border-radius:16px;color:#8ba2bb}.check{display:grid;grid-template-columns:22px 1fr 70px;align-items:center;gap:8px;margin:6px 0;color:#d8e5f5}.check input{margin:0}.check .small{padding:7px;margin:0}.bar{display:grid;grid-template-columns:160px 160px 1fr;gap:12px;margin:14px 0}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #20364f;text-align:left;font-size:14px}th{color:#aac0d6;background:#101d2e}td input,td select{margin:0;padding:8px}.buy,.pos{color:#4ade80;font-weight:700}.sell,.neg{color:#fb7185;font-weight:700}@media(max-width:900px){.layout{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}.bar{grid-template-columns:1fr}}
+*{box-sizing:border-box}
+body{margin:0;background:#06101c;color:#edf5ff;font-family:Arial,sans-serif}
+.page{padding:18px}
+.top{display:flex;justify-content:space-between;align-items:center;background:#0b1524;border:1px solid #20364f;border-radius:16px;padding:18px;margin-bottom:18px}
+h1{margin:0;font-size:32px}
+p{color:#9db1c8}
+
+/* pannello controlli sopra */
+.layout{display:grid;grid-template-columns:1fr;gap:18px}
+.side,.content{background:#0b1524;border:1px solid #20364f;border-radius:16px;padding:16px}
+.side{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:12px 14px;align-items:end}
+.side h2{grid-column:1/-1;font-size:16px;margin:8px 0 0;color:#fff;border-top:1px solid #20364f;padding-top:12px}
+.side h2:first-child{border-top:0;padding-top:0}
+.side p.hint{grid-column:span 2;align-self:center}
+.side label{font-size:12px;color:#aac0d6;display:block;margin-bottom:4px}
+.side input,.side select{width:100%}
+
+input,select{background:#101d2e;border:1px solid #2a4665;color:white;padding:10px 12px;border-radius:9px;margin:0}
+button{background:#13263d;border:1px solid #2b4968;color:white;border-radius:9px;padding:10px 14px;cursor:pointer}
+button.primary{background:#155bd7;border-color:#3182ff;font-weight:700}
+.full{width:100%;margin:0}
+.hint{font-size:13px;color:#8ba2bb}
+
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.cards div{background:#101d2e;border:1px solid #20364f;border-radius:12px;padding:12px}
+.cards span{color:#8ba2bb;font-size:12px;display:block}
+.cards b{margin-top:6px;display:block}
+
+.chart{width:100%;height:520px;border:1px solid #20364f;border-radius:16px;margin-bottom:14px}
+.empty-chart{height:520px;display:flex;align-items:center;justify-content:center;border:1px dashed #2b4968;border-radius:16px;color:#8ba2bb}
+
+.preview-panel,.auto-list{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#10253b;border:1px solid #24527c;padding:14px;border-radius:12px;margin-bottom:14px}
+.auto-list{display:block}
+.auto-list button{margin:4px}
+.preview-panel h3,.auto-list h3{margin:0 0 6px}
+.preview-panel p{margin:0}
+.mini-actions{display:flex;gap:8px}
+
+.tradegrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.box{background:#0d1a2b;border:1px solid #20364f;border-radius:14px;padding:14px}
+.bar{display:grid;grid-template-columns:160px 160px 1fr;gap:12px;margin:14px 0}
+
+table{width:100%;border-collapse:collapse}
+th,td{padding:11px;border-bottom:1px solid #20364f;text-align:left;font-size:14px}
+th{color:#aac0d6;background:#101d2e}
+.buy,.pos{color:#4ade80;font-weight:700}
+.sell,.neg{color:#fb7185;font-weight:700}
+
+.edit-note{background:#13263d;border:1px solid #2b4968;color:#cbd5e1;padding:10px 12px;border-radius:10px;margin:12px 0;font-size:13px}
+.table-input{margin:0!important;padding:8px!important;min-width:90px;width:100%;font-size:14px}
+.table-input.small{max-width:90px}
+.table-input.price-input{max-width:130px}
+.table-input.dir-select{max-width:105px}
+.table-input.dir-select option{background:#101d2e;color:#fff}
+
+@media(max-width:1400px){.side{grid-template-columns:repeat(4,minmax(150px,1fr))}}
+@media(max-width:900px){.side{grid-template-columns:repeat(2,minmax(130px,1fr))}.tradegrid{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}.bar{grid-template-columns:1fr}.preview-panel{flex-direction:column;align-items:flex-start}}
+@media(max-width:560px){.side{grid-template-columns:1fr}.cards{grid-template-columns:1fr}.top{flex-direction:column;align-items:flex-start;gap:12px}}
