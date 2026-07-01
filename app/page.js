@@ -109,11 +109,6 @@ function pnl(side, entry, exit, lot, pointValue) {
   return side === "buy" ? (exit - entry) * lot * pointValue : (entry - exit) * lot * pointValue;
 }
 
-function recalcTrade(t, pointValue) {
-  const p = pnl(t.side, Number(t.entry), Number(t.exit), Number(t.lot), Number(pointValue));
-  return { ...t, profit: Number(p.toFixed(2)) };
-}
-
 function candleMenu(c) {
   return `${itDate(c.time, false)} | O ${price(c.open)} H ${price(c.high)} L ${price(c.low)} C ${price(c.close)}`;
 }
@@ -243,7 +238,7 @@ function renderReportBlob(trades, layout, tab, deposit, credit, withdrawal) {
     ["Day","Week","Month","Custom"].forEach((t,i)=>{ const x=95+i*618/4; if(t===tab){ctx.fillStyle="#fff";roundRect(ctx,x+4,28,618/4-8,58,6,true,false)} ctx.fillStyle="#151515"; ctx.font="700 30px Arial"; ctx.fillText(t,x+618/8-ctx.measureText(t).width/2,67);});
   }
   const top=dark?150:118, rowH=compact?96:(dark?106:116), maxRows=compact?11:(dark?10:9);
-  trades.slice(0,maxRows).forEach((t,i)=>{ const y=top+i*rowH; ctx.strokeStyle=line; ctx.beginPath(); ctx.moveTo(0,y+rowH-2); ctx.lineTo(828,y+rowH-2); ctx.stroke(); ctx.font="700 32px Arial"; ctx.fillStyle=main; ctx.fillText("XAUUSD, ",20,y+(dark?34:40)); const bw=ctx.measureText("XAUUSD, ").width; ctx.fillStyle=t.side==="buy"?blue:red; ctx.fillText(`${t.side} ${Number(t.lot).toFixed(3)}`,20+bw,y+(dark?34:40)); ctx.font="28px Arial"; ctx.fillStyle=muted; ctx.fillText(`${price(t.entry)} → ${price(t.exit)}`,20,y+(dark?78:86)); ctx.font="700 26px Arial"; const dt=reportDate(t.closeTime); ctx.fillText(dt,808-ctx.measureText(dt).width,y+(dark?42:46)); ctx.font="700 32px Arial"; const pp=money(t.profit); ctx.fillStyle=t.profit>=0?blue:red; ctx.fillText(pp,808-ctx.measureText(pp).width,y+(dark?84:92));});
+  trades.slice(0,maxRows).forEach((t,i)=>{ const y=top+i*rowH; ctx.strokeStyle=line; ctx.beginPath(); ctx.moveTo(0,y+rowH-2); ctx.lineTo(828,y+rowH-2); ctx.stroke(); ctx.font="700 32px Arial"; ctx.fillStyle=main; ctx.fillText("XAUUSD, ",20,y+(dark?34:40)); const bw=ctx.measureText("XAUUSD, ").width; ctx.fillStyle=t.side==="buy"?blue:red; ctx.fillText(`${t.side} ${t.lot.toFixed(2)}`,20+bw,y+(dark?34:40)); ctx.font="28px Arial"; ctx.fillStyle=muted; ctx.fillText(`${price(t.entry)} → ${price(t.exit)}`,20,y+(dark?78:86)); ctx.font="700 26px Arial"; const dt=reportDate(t.closeTime); ctx.fillText(dt,808-ctx.measureText(dt).width,y+(dark?42:46)); ctx.font="700 32px Arial"; const pp=money(t.profit); ctx.fillStyle=t.profit>=0?blue:red; ctx.fillText(pp,808-ctx.measureText(pp).width,y+(dark?84:92));});
   const sy=1792-315; ctx.strokeStyle=line; ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(828,sy); ctx.stroke();
   [["Profit:",totalProfit],["Credit:",Number(credit)],["Deposit:",Number(deposit)],["Withdrawal:",Number(withdrawal)],["Balance:",balance]].forEach((r,i)=>{ const y=sy+50+i*40; ctx.font="700 32px Arial"; ctx.fillStyle=grey; ctx.fillText(r[0],20,y); const val=money(r[1]); ctx.fillText(val,798-ctx.measureText(val).width,y);});
   return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
@@ -419,30 +414,12 @@ export default function LucaTradingAuto() {
 
   function scenarioPairs() {
     return [
-      { name: "Scenario 1", open: scenario1Open, close: scenario1Close },
-      { name: "Scenario 2", open: scenario2Open, close: scenario2Close },
-      { name: "Scenario 3", open: scenario3Open, close: scenario3Close }
+      { open: scenario1Open, close: scenario1Close },
+      { open: scenario2Open, close: scenario2Close },
+      { open: scenario3Open, close: scenario3Close }
     ]
-    .map(s => ({
-      ...s,
-      open: String(s.open).trim() === "" ? NaN : Number(String(s.open).replace(",", ".")),
-      close: String(s.close).trim() === "" ? NaN : Number(String(s.close).replace(",", "."))
-    }))
+    .map(s => ({ open: Number(String(s.open).replace(",", ".")), close: Number(String(s.close).replace(",", ".")) }))
     .filter(s => !Number.isNaN(s.open) && !Number.isNaN(s.close));
-  }
-
-  function updateTrade(index, field, value) {
-    setTrades(prev => prev.map((t, i) => {
-      if (i !== index) return t;
-      let updated = { ...t };
-
-      if (field === "side") updated.side = value;
-      if (field === "lot") updated.lot = Number(String(value).replace(",", "."));
-      if (field === "entry") updated.entry = Number(String(value).replace(",", "."));
-      if (field === "exit") updated.exit = Number(String(value).replace(",", "."));
-
-      return recalcTrade(updated, pointValue);
-    }));
   }
 
   function filteredCandles() {
@@ -456,7 +433,7 @@ export default function LucaTradingAuto() {
     });
   }
 
-  function makeTrade(wantPositive, pool, forcedScenario = null) {
+  function makeTrade(wantPositive, pool) {
     const scenarios = scenarioPairs();
 
     for (let tries = 0; tries < 900; tries++) {
@@ -464,20 +441,20 @@ export default function LucaTradingAuto() {
       const b = randInt(a + 1, pool.length - 1);
       const c1 = pool[a];
       const c2 = pool[b];
-
-      // Lotto a 3 decimali per evitare P/L sempre tondo tipo ,00.
-      const l = Number(rand(Number(lotMin), Number(lotMax)).toFixed(3));
+      const l = Number(rand(Number(lotMin), Number(lotMax)).toFixed(2));
 
       let direction = Math.random() > 0.5 ? "buy" : "sell";
       let entryP;
       let exitP;
 
-      // Se hai compilato più scenari, la generazione li usa tutti a rotazione.
-      if (forcedScenario || scenarios.length) {
-        const sc = forcedScenario || scenarios[randInt(0, scenarios.length - 1)];
+      // Se hai compilato uno o più scenari, usa uno di quelli.
+      // I valori possono essere anche fuori dal range della candela: la tabella resta modificabile.
+      if (scenarios.length) {
+        const sc = scenarios[randInt(0, scenarios.length - 1)];
         entryP = sc.open;
         exitP = sc.close;
 
+        // Sceglie automaticamente BUY/SELL coerente con positivo/negativo quando possibile.
         if (wantPositive) {
           direction = exitP >= entryP ? "buy" : "sell";
         } else {
@@ -521,26 +498,19 @@ export default function LucaTradingAuto() {
     const pool = filteredCandles();
     if (pool.length < 5) return alert("Servono più candele nel range selezionato.");
     const created = [];
-    const scenarios = scenarioPairs();
 
     for (let s = 0; s < Number(screenCount); s++) {
       let best = null;
       for (let attempt = 0; attempt < 500; attempt++) {
         const arr = [];
-        let scenarioCursor = 0;
-
         for (let i = 0; i < Number(autoPositive); i++) {
-          const forced = scenarios.length ? scenarios[scenarioCursor++ % scenarios.length] : null;
-          const t = makeTrade(true, pool, forced);
+          const t = makeTrade(true, pool);
           if (t) arr.push(t);
         }
-
         for (let i = 0; i < Number(autoNegative); i++) {
-          const forced = scenarios.length ? scenarios[scenarioCursor++ % scenarios.length] : null;
-          const t = makeTrade(false, pool, forced);
+          const t = makeTrade(false, pool);
           if (t) arr.push(t);
         }
-
         arr.sort((a,b) => a.closeTime - b.closeTime);
         const total = arr.reduce((a,t)=>a+t.profit,0);
         if (total >= Number(profitMin) && total <= Number(profitMax)) {
@@ -567,7 +537,7 @@ export default function LucaTradingAuto() {
       const blob = await renderReportBlob(set.trades, layout, tab, deposit, credit, withdrawal);
       zip.file(`${set.name}.png`, blob);
       set.trades.forEach(t => {
-        allRows.push(`${set.name},${t.side},${Number(t.lot).toFixed(3)},${itDate(t.openTime)},${price(t.entry)},${itDate(t.closeTime)},${price(t.exit)},${t.profit.toFixed(2)}`);
+        allRows.push(`${set.name},${t.side},${t.lot.toFixed(2)},${itDate(t.openTime)},${price(t.entry)},${itDate(t.closeTime)},${price(t.exit)},${t.profit.toFixed(2)}`);
       });
     }
     zip.file("operazioni_generate.csv", allRows.join("\n"));
@@ -630,47 +600,7 @@ export default function LucaTradingAuto() {
           {autoSets.length > 0 && <div className="auto-list"><h3>Screen automatici generati</h3>{autoSets.map((s,i)=><button key={i} onClick={()=>setTrades(s.trades)}>{s.name} · profit {money(s.trades.reduce((a,t)=>a+t.profit,0))}</button>)}</div>}
           <div className="tradegrid"><div className="box"><h2>Apertura</h2><select value={entryIndex} onChange={e=>{const idx=Number(e.target.value);setEntryIndex(idx);setEntryPrice(candlesBySelectedDays[idx]?.open.toFixed(3)||"")}}>{candlesBySelectedDays.map((c,i)=><option key={c.id} value={i}>{candleMenu(c)}</option>)}</select>{entry&&<p className="hint">Range reale: {price(entry.low)} - {price(entry.high)}</p>}<label>Prezzo apertura</label><input type="number" step="0.001" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)}/><label>Secondo apertura</label><input type="number" min="0" max="59" value={entrySecond} onChange={e=>setEntrySecond(e.target.value)}/></div><div className="box"><h2>Chiusura</h2><select value={exitIndex} onChange={e=>{const idx=Number(e.target.value);setExitIndex(idx);setExitPrice(candlesBySelectedDays[idx]?.close.toFixed(3)||"")}}>{candlesBySelectedDays.map((c,i)=><option key={c.id} value={i}>{candleMenu(c)}</option>)}</select>{exit&&<p className="hint">Range reale: {price(exit.low)} - {price(exit.high)}</p>}<label>Prezzo chiusura</label><input type="number" step="0.001" value={exitPrice} onChange={e=>setExitPrice(e.target.value)}/><label>Secondo chiusura</label><input type="number" min="0" max="59" value={exitSecond} onChange={e=>setExitSecond(e.target.value)}/></div></div>
           <div className="bar"><select value={side} onChange={e=>setSide(e.target.value)}><option value="buy">BUY</option><option value="sell">SELL</option></select><input type="number" step="0.01" value={lot} onChange={e=>setLot(e.target.value)}/><button className="primary" onClick={addTrade}>Aggiungi operazione</button></div>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Tipo</th>
-                <th>Lotto</th>
-                <th>Apertura</th>
-                <th>Valore apertura</th>
-                <th>Chiusura</th>
-                <th>Valore chiusura</th>
-                <th>P/L</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {trades.map((t,i)=>
-                <tr key={i}>
-                  <td>{i+1}</td>
-                  <td>
-                    <select className="table-input" value={t.side} onChange={e=>updateTrade(i, "side", e.target.value)}>
-                      <option value="buy">BUY</option>
-                      <option value="sell">SELL</option>
-                    </select>
-                  </td>
-                  <td>
-                    <input className="table-input" type="number" step="0.001" value={t.lot} onChange={e=>updateTrade(i, "lot", e.target.value)}/>
-                  </td>
-                  <td>{itDate(t.openTime)}</td>
-                  <td>
-                    <input className="table-input" type="number" step="0.001" value={t.entry} onChange={e=>updateTrade(i, "entry", e.target.value)}/>
-                  </td>
-                  <td>{itDate(t.closeTime)}</td>
-                  <td>
-                    <input className="table-input" type="number" step="0.001" value={t.exit} onChange={e=>updateTrade(i, "exit", e.target.value)}/>
-                  </td>
-                  <td className={t.profit>=0?"pos":"neg"}>{money(t.profit)}</td>
-                  <td><button onClick={()=>setTrades(trades.filter((_,x)=>x!==i))}>×</button></td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <table><thead><tr><th>#</th><th>Dir</th><th>Lotto</th><th>Apertura</th><th>Prezzo</th><th>Chiusura</th><th>Prezzo</th><th>P/L</th><th></th></tr></thead><tbody>{trades.map((t,i)=><tr key={i}><td>{i+1}</td><td className={t.side==="buy"?"buy":"sell"}>{t.side.toUpperCase()}</td><td>{t.lot.toFixed(2)}</td><td>{itDate(t.openTime)}</td><td>{price(t.entry)}</td><td>{itDate(t.closeTime)}</td><td>{price(t.exit)}</td><td className={t.profit>=0?"pos":"neg"}>{money(t.profit)}</td><td><button onClick={()=>setTrades(trades.filter((_,x)=>x!==i))}>×</button></td></tr>)}</tbody></table>
         </section>
       </div>
     </main>
