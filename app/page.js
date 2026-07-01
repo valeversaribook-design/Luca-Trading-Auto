@@ -465,7 +465,7 @@ export default function LucaTradingAuto() {
       const c1 = pool[a];
       const c2 = pool[b];
 
-      // Lotto a 3 decimali per evitare P/L sempre “tondo”.
+      // Lotto a 3 decimali per evitare P/L sempre tondo tipo ,00.
       const l = Number(rand(Number(lotMin), Number(lotMax)).toFixed(3));
 
       let direction = Math.random() > 0.5 ? "buy" : "sell";
@@ -478,7 +478,6 @@ export default function LucaTradingAuto() {
         entryP = sc.open;
         exitP = sc.close;
 
-        // Sceglie automaticamente BUY/SELL coerente con positivo/negativo.
         if (wantPositive) {
           direction = exitP >= entryP ? "buy" : "sell";
         } else {
